@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SurfWatch • Météo Surf Temps Réel</title>
+    <!-- Police Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons via CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        ocean: {
+                            950: '#040d1a',
+                            900: '#07152b',
+                            800: '#0d2342',
+                            700: '#15345e',
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #040d1a;
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(6, 182, 212, 0.08) 0%, transparent 45%),
+                radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.06) 0%, transparent 45%),
+                linear-gradient(180deg, #040d1a 0%, #07152b 100%);
+            color: #f1f5f9;
+            min-height: 100vh;
+        }
+
+        /* Glassmorphism */
+        .glass-card {
+            background: rgba(13, 35, 66, 0.45);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.16);
+            box-shadow: 0 8px 32px 0 rgba(2, 8, 20, 0.45);
+        }
+
+        .glass-panel {
+            background: rgba(7, 21, 43, 0.72);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #040d1a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #15345e;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #06b6d4;
+        }
+
+        /* Toast transition */
+        .toast-enter {
+            transform: translateY(100%) scale(0.95);
+            opacity: 0;
+        }
+        .toast-active {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
+
+    <!-- Barre de Navigation Supérieure -->
+    <header class="sticky top-0 z-40 glass-panel border-b border-cyan-500/15">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+            <!-- Logo & Titre -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-ocean-950">
+                    <i data-lucide="waves" class="w-6 h-6 stroke-[2.5]"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white">SurfWatch</h1>
+                        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                            TEMPS RÉEL
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 hidden sm:block">Météo Surf Temps Réel & Analyse des Conditions</p>
+                </div>
+            </div>
+
+            <!-- Contrôles Centraux : Mode d'affichage & Unités -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Sélecteur Vue Comparatif / Détaillée -->
+                <div class="bg-ocean-950/80 p-1 rounded-xl border border-slate-700/60 flex items-center">
+                    <button id="btnViewCompare" onclick="setViewMode('compare')" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                        <i data-lucide="columns-2" class="w-3.5 h-3.5"></i>
+                        <span class="hidden md:inline">Comparatif</span>
+                    </button>
+                    <button id="btnViewDetail" onclick="setViewMode('detail')" class="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
+                        <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+                        <span class="hidden md:inline">Vue Détaillée</span>
+                    </button>
+                </div>
+
+                <!-- Sélecteur Unité Vent -->
+                <button id="btnToggleUnit" onclick="toggleWindUnit()" title="Changer l'unité principale du vent" class="px-2.5 py-2 rounded-xl bg-ocean-800/70 hover:bg-ocean-700/80 border border-slate-700/60 text-xs font-semibold text-slate-200 transition flex items-center gap-1.5">
+                    <i data-lucide="wind" class="w-3.5 h-3.5 text-cyan-400"></i>
+                    <span id="unitLabel">km/h</span>
+                </button>
+
+                <!-- Bouton Ajouter un spot -->
+                <button onclick="openAddSpotModal()" class="px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-ocean-950 font-semibold text-xs sm:text-sm shadow-lg shadow-cyan-500/20 transition flex items-center gap-1.5">
+                    <i data-lucide="plus" class="w-4 h-4 stroke-[2.5]"></i>
+                    <span class="hidden sm:inline">Ajouter un spot</span>
+                </button>
+
+                <!-- Bouton Actualiser -->
+                <button id="btnRefresh" onclick="refreshAllData(true)" title="Actualiser les prévisions" class="p-2 rounded-xl bg-ocean-800/80 hover:bg-ocean-700 border border-cyan-500/20 text-cyan-300 transition">
+                    <i id="refreshIcon" data-lucide="refresh-cw" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Bandeau d'information & Horodatage -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <div class="glass-panel rounded-2xl px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs text-slate-300 border-cyan-500/15">
+            <div class="flex items-start sm:items-center gap-2.5">
+                <i data-lucide="waves" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5 sm:mt-0"></i>
+                <p>
+                    <span class="font-semibold text-white">Prévisions Marines & Vent :</span> 
+                    Données horaires temps réel, analyse d'orientation du vent par rapport à la plage et accès direct aux sites spécialisés.
+                </p>
+            </div>
+            <div class="flex flex-wrap items-center justify-between md:justify-end gap-3 shrink-0 text-slate-400 border-t md:border-t-0 pt-2 md:pt-0 border-slate-800">
+                <span id="dataSourceBadge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Connexion API...
+                </span>
+                <span id="lastUpdateText" class="flex items-center gap-1.5">
+                    Chargement...
+                </span>
+                <button onclick="resetDefaultSpots()" class="text-slate-500 hover:text-rose-400 transition underline" title="Restaurer les spots par défaut">
+                    Réinitialiser
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barre de sélection rapide de spot (visible en Vue Détaillée ou sur mobile) -->
+    <div id="spotSelectorBar" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 hidden">
+        <div id="spotTabsContainer" class="flex items-center gap-2 overflow-x-auto pb-1">
+            <!-- Onglets injectés dynamiquement -->
+        </div>
+    </div>
+
+    <!-- Conteneur Principal du Tableau de Bord -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- État de chargement (Skeletons) -->
+        <div id="loadingSkeleton" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card rounded-3xl p-6 space-y-5 animate-pulse">
+                <div class="flex justify-between items-start">
+                    <div class="space-y-2">
+                        <div class="h-6 w-56 bg-ocean-700/70 rounded-lg"></div>
+                        <div class="h-4 w-36 bg-ocean-800 rounded-lg"></div>
+                    </div>
+                    <div class="h-10 w-28 bg-ocean-700/70 rounded-xl"></div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="h-24 bg-ocean-800/80 rounded-2xl"></div>
+                    <div class="h-24 bg-ocean-800/80 rounded-2xl"></div>
+                    <div class="h-24 bg-ocean-800/80 rounded-2xl"></div>
+                </div>
+                <div class="h-32 bg-ocean-800/60 rounded-2xl"></div>
+                <div class="h-48 bg-ocean-800/60 rounded-2xl"></div>
+            </div>
+            <div class="glass-card rounded-3xl p-6 space-y-5 animate-pulse">
+                <div class="flex justify-between items-start">
+                    <div class="space-y-2">
+                        <div class="h-6 w-56 bg-ocean-700/70 rounded-lg"></div>
+                        <div class="h-4 w-36 bg-ocean-800 rounded-lg"></div>
+                    </div>
+                    <div class="h-10 w-28 bg-ocean-700/70 rounded-xl"></div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="h-24 bg-ocean-800/80 rounded-2xl"></div>
+                    <div class="h-24 bg-ocean-800/80 rounded-2xl"></div>
+                    <div class="h-24 bg-ocean-800/80 rounded-2xl"></div>
+                </div>
+                <div class="h-32 bg-ocean-800/60 rounded-2xl"></div>
+                <div class="h-48 bg-ocean-800/60 rounded-2xl"></div>
+            </div>
+        </div>
+
+        <!-- Grille des Spots (Comparatif ou Détaillé) -->
+        <div id="spotsContainer" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Les cartes des spots seront injectées ici -->
+        </div>
+    </main>
+
+    <!-- Modale : Ajouter un Spot Personnalisé -->
+    <div id="addSpotModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-ocean-950/80 backdrop-blur-sm">
+        <div class="glass-card bg-ocean-900 border border-cyan-500/30 rounded-3xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-700/60">
+                <div class="flex items-center gap-2.5">
+                    <div class="p-2 rounded-xl bg-cyan-500/15 text-cyan-400">
+                        <i data-lucide="map-pin-plus" class="w-5 h-5"></i>
+                    </div>
+                    <h2 class="text-lg font-bold text-white">Ajouter un spot de surf</h2>
+                </div>
+                <button onclick="closeAddSpotModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-ocean-800 transition">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="addSpotForm" onsubmit="handleAddSpot(event)" class="space-y-4 mt-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Nom du spot *</label>
+                        <input type="text" id="spotName" required placeholder="Ex: La Torche" class="w-full px-3.5 py-2.5 rounded-xl bg-ocean-950/90 border border-slate-700 focus:border-cyan-400 focus:outline-none text-sm text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Commune / Dép. *</label>
+                        <input type="text" id="spotLocation" required placeholder="Ex: Plomeur (29)" class="w-full px-3.5 py-2.5 rounded-xl bg-ocean-950/90 border border-slate-700 focus:border-cyan-400 focus:outline-none text-sm text-white">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Latitude (GPS) *</label>
+                        <input type="number" step="any" id="spotLat" required placeholder="Ex: 47.836" class="w-full px-3.5 py-2.5 rounded-xl bg-ocean-950/90 border border-slate-700 focus:border-cyan-400 focus:outline-none text-sm text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Longitude (GPS) *</label>
+                        <input type="number" step="any" id="spotLon" required placeholder="Ex: -4.354" class="w-full px-3.5 py-2.5 rounded-xl bg-ocean-950/90 border border-slate-700 focus:border-cyan-400 focus:outline-none text-sm text-white">
+                    </div>
+                </div>
+
+                <!-- Orientation de la plage avec boussole interactive -->
+                <div class="p-4 rounded-2xl bg-ocean-950/70 border border-slate-800">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-medium text-slate-300">Orientation de la plage face à l'océan *</label>
+                        <span id="beachAngleDisplay" class="text-xs font-bold text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-lg border border-cyan-500/20">270° (O)</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <input type="range" id="spotBeachDir" min="0" max="355" step="5" value="270" oninput="updateCompassPreview(this.value)" class="w-full accent-cyan-400 cursor-pointer">
+                        <!-- Mini Boussole SVG -->
+                        <div class="w-14 h-14 rounded-full bg-ocean-900 border border-cyan-500/30 relative flex items-center justify-center shrink-0">
+                            <span class="absolute top-0.5 text-[8px] font-bold text-slate-400">N</span>
+                            <span class="absolute bottom-0.5 text-[8px] font-bold text-slate-400">S</span>
+                            <span class="absolute left-1 text-[8px] font-bold text-slate-400">O</span>
+                            <span class="absolute right-1 text-[8px] font-bold text-slate-400">E</span>
+                            <div id="compassNeedle" class="w-1 h-9 flex flex-col items-center transition-transform duration-150" style="transform: rotate(270deg);">
+                                <div class="w-2 h-2 rounded-full bg-cyan-400 shadow shadow-cyan-400"></div>
+                                <div class="w-0.5 h-3.5 bg-cyan-400"></div>
+                                <div class="w-0.5 h-3.5 bg-slate-600"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-1.5">Indique vers quel cap regarde la plage (ex: 270° = plage orientée plein Ouest, vent d'Est 90° = Offshore).</p>
+                </div>
+
+                <!-- Liens raccourcis optionnels -->
+                <div class="space-y-2.5 pt-2">
+                    <p class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                        <i data-lucide="link" class="w-3.5 h-3.5 text-emerald-400"></i>
+                        Raccourcis plateformes météo (Optionnel)
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <input type="url" id="urlSurfline" placeholder="URL Surfline" class="px-3 py-2 rounded-xl bg-ocean-950/90 border border-slate-700/80 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                        <input type="url" id="urlWindguru" placeholder="URL Windguru" class="px-3 py-2 rounded-xl bg-ocean-950/90 border border-slate-700/80 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                        <input type="url" id="urlWindy" placeholder="URL Windy" class="px-3 py-2 rounded-xl bg-ocean-950/90 border border-slate-700/80 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                        <input type="url" id="urlSurfReport" placeholder="URL Surf-Report" class="px-3 py-2 rounded-xl bg-ocean-950/90 border border-slate-700/80 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                        <input type="url" id="urlAllosurf" placeholder="URL AlloSurf" class="px-3 py-2 rounded-xl bg-ocean-950/90 border border-slate-700/80 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                        <input type="url" id="urlSurfSentinel" placeholder="URL Surf Sentinel" class="px-3 py-2 rounded-xl bg-ocean-950/90 border border-slate-700/80 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                        <input type="url" id="urlMaree" placeholder="URL Maree.info" class="sm:col-span-2 px-3 py-2 rounded-xl bg-ocean-950/90 border border-slate-700/80 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-700/60">
+                    <button type="button" onclick="closeAddSpotModal()" class="px-4 py-2.5 rounded-xl bg-ocean-800 hover:bg-ocean-700 text-slate-300 text-xs font-semibold transition">
+                        Annuler
+                    </button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-ocean-950 text-xs font-bold shadow-lg shadow-cyan-500/20 transition">
+                        Enregistrer le spot
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Conteneur Notifications Toast -->
+    <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
+
+    <script>
+        // ============================================================================
+        // 1. CONFIGURATION INITIALE & SPOTS PRÉCONFIGURÉS
+        // ============================================================================
+        const STORAGE_KEY = 'surfwatch_spots_v2';
+        const UNIT_STORAGE_KEY = 'surfwatch_wind_unit_v2';
+
+        const DEFAULT_SPOTS = [
+            {
+                id: 'les-rochelets-44',
+                name: 'Les Rochelets',
+                location: 'Saint-Brevin-les-Pins (44)',
+                lat: 47.224,
+                lon: -2.215, // Coordonnée océanique propre au large pour éviter tout null sur l'estran
+                beachOrientation: 265, // Ouest (265°)
+                isDefault: true,
+                links: [
+                    { name: 'Surf Sentinel', url: 'https://www.surf-sentinel.com/surf-report/france/loire-atlantique/saint-brevin-les-pins/les-rochelets', color: 'cyan' },
+                    { name: 'Surfline', url: 'https://www.surfline.com/surf-report/l-ermitage/6418e11e6478f0760afa776f', color: 'sky' },
+                    { name: 'Surf Report', url: 'https://www.surf-report.com/meteo-surf/les-rochelets-s102803.html', color: 'blue' },
+                    { name: 'AlloSurf', url: 'https://www.allosurf.net/meteo/surf/l-ermitage-meteo-ww3-27-gfs-27-1-a-16-jours-1284.html', color: 'indigo' },
+                    { name: 'Windguru', url: 'https://www.windguru.cz/48509', color: 'amber' },
+                    { name: 'Windy', url: 'https://www.windy.com/47.224/-2.171/ecmwfWaves/waves?47.210,-2.171,13', color: 'rose' },
+                    { name: 'Maree.info', url: 'https://maree.info/117', color: 'emerald' }
+                ]
+            },
+            {
+                id: 'la-guerite-56',
+                name: 'La Guérite',
+                location: 'Plouharnel (56)',
+                lat: 47.590,
+                lon: -3.175, // Coordonnée océanique propre au large
+                beachOrientation: 245, // Ouest-Sud-Ouest (245°)
+                isDefault: true,
+                links: [
+                    { name: 'Surf Sentinel', url: 'https://www.surf-sentinel.com/surf-report/france/morbihan/plouharnel/la-guerite-tata-beach', color: 'cyan' },
+                    { name: 'Surfline', url: 'https://www.surfline.com/surf-report/penthi-vre/6418e12a9a43c4af6537ebf7', color: 'sky' },
+                    { name: 'Surf Report', url: 'https://www.surf-report.com/meteo-surf/la-guerite-s1170.html', color: 'blue' },
+                    { name: 'AlloSurf', url: 'https://www.allosurf.net/meteo/surf/la-guerite-meteo-ww3-27-gfs-27-1-a-16-jours-3000160.html', color: 'indigo' },
+                    { name: 'Windguru', url: 'https://www.windguru.cz/48481', color: 'amber' },
+                    { name: 'Windy', url: 'https://www.windy.com/47.598/-3.153/ecmwfWaves/waves?47.588,-3.153,14', color: 'rose' },
+                    { name: 'Maree.info', url: 'https://maree.info/100', color: 'emerald' }
+                ]
+            }
+        ];
+
+        // État global de l'application
+        let state = {
+            spots: [],
+            forecasts: {}, // Clé = spot.id
+            viewMode: 'compare', // 'compare' | 'detail'
+            selectedSpotId: 'les-rochelets-44',
+            windUnit: localStorage.getItem(UNIT_STORAGE_KEY) || 'kmh', // 'kmh' | 'kts'
+            lastUpdated: null,
+            isLive: true
+        };
+
+        // ============================================================================
+        // 2. UTILITAIRES MÉTÉO & CALCULS TRIGONOMÉTRIQUES SURF
+        // ============================================================================
+
+        /**
+         * Convertit un angle en degrés (0-360) vers la rose des vents française 16 points
+         */
+        function degreesToCardinal(deg) {
+            if (deg === null || deg === undefined || isNaN(deg)) return 'N/A';
+            const directions = [
+                'N', 'NNE', 'NE', 'ENE',
+                'E', 'ESE', 'SE', 'SSE',
+                'S', 'SSO', 'SO', 'OSO',
+                'O', 'ONO', 'NO', 'NNO'
+            ];
+            const index = Math.round(((deg % 360) / 22.5)) % 16;
+            return directions[index];
+        }
+
+        /**
+         * Convertit nœuds en km/h (1 kt = 1.852 km/h)
+         */
+        function knotsToKmh(kts) {
+            return Math.round(kts * 1.852);
+        }
+
+        /**
+         * Formate la vitesse du vent (reçue en nœuds depuis l'API) selon l'unité sélectionnée
+         */
+        function formatWindSpeed(kts, compact = false) {
+            const ktsRound = Math.round(kts);
+            const kmhRound = knotsToKmh(kts);
+            if (compact) {
+                return state.windUnit === 'kts' ? `${ktsRound} nds` : `${kmhRound} km/h`;
+            }
+            return state.windUnit === 'kts'
+                ? `${ktsRound} nds <span class="text-slate-400 font-normal text-xs">(${kmhRound} km/h)</span>`
+                : `${kmhRound} km/h <span class="text-slate-400 font-normal text-xs">(${ktsRound} nds)</span>`;
+        }
+
+        /**
+         * Calcule l'orientation du vent par rapport à la plage
+         */
+        function analyzeWindOrientation(windDir, beachOrientation) {
+            let diff = Math.abs(windDir - beachOrientation) % 360;
+            if (diff > 180) diff = 360 - diff;
+
+            if (diff >= 135) {
+                return {
+                    type: 'Offshore',
+                    sub: 'Idéal',
+                    scoreFactor: 1.0,
+                    badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+                    dotClass: 'bg-emerald-400'
+                };
+            } else if (diff >= 100) {
+                return {
+                    type: 'Side-Off',
+                    sub: 'Très propre',
+                    scoreFactor: 0.85,
+                    badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+                    dotClass: 'bg-cyan-400'
+                };
+            } else if (diff >= 65) {
+                return {
+                    type: 'Side-shore',
+                    sub: 'Travers',
+                    scoreFactor: 0.55,
+                    badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+                    dotClass: 'bg-amber-400'
+                };
+            } else if (diff >= 40) {
+                return {
+                    type: 'Side-On',
+                    sub: 'Agité',
+                    scoreFactor: 0.3,
+                    badgeClass: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
+                    dotClass: 'bg-orange-400'
+                };
+            } else {
+                return {
+                    type: 'Onshore',
+                    sub: 'Clapot',
+                    scoreFactor: 0.1,
+                    badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+                    dotClass: 'bg-rose-400'
+                };
+            }
+        }
+
+        /**
+         * Calcule la note surf sur 5 étoiles et le qualificatif de session (vent en nœuds)
+         */
+        function calculateSurfRating(waveHeight, wavePeriod, windSpeedKts, windAnalysis) {
+            if (waveHeight < 0.35) {
+                return { stars: 0.5, label: 'Flat', color: 'text-slate-400', bg: 'bg-slate-500/15 border-slate-500/30' };
+            }
+
+            let sizeScore = 0;
+            if (waveHeight < 0.6) sizeScore = 1.0;
+            else if (waveHeight < 0.9) sizeScore = 2.0;
+            else if (waveHeight <= 2.4) sizeScore = 3.0;
+            else if (waveHeight <= 3.2) sizeScore = 2.5;
+            else sizeScore = 1.8;
+
+            let periodScore = 0;
+            if (wavePeriod >= 14) periodScore = 1.5;
+            else if (wavePeriod >= 11) periodScore = 1.2;
+            else if (wavePeriod >= 9) periodScore = 0.8;
+            else periodScore = 0.3;
+
+            let windScore = windAnalysis.scoreFactor * 1.5;
+            if (windSpeedKts < 7) {
+                windScore = Math.max(windScore, 1.2); // Glassy
+            } else if (windSpeedKts > 19 && windAnalysis.scoreFactor < 0.6) {
+                windScore -= 0.6;
+            }
+
+            let rawScore = Math.max(0.5, Math.min(5, sizeScore * 0.55 + periodScore * 0.7 + windScore * 0.8));
+            const stars = Math.round(rawScore * 2) / 2;
+
+            let label = 'Moyen';
+            let color = 'text-amber-300';
+            let bg = 'bg-amber-500/15 border-amber-500/30';
+
+            if (stars >= 4.5) {
+                label = 'Session Épique';
+                color = 'text-emerald-300';
+                bg = 'bg-emerald-500/20 border-emerald-500/40';
+            } else if (stars >= 3.5) {
+                label = 'Bonnes conditions';
+                color = 'text-cyan-300';
+                bg = 'bg-cyan-500/20 border-cyan-500/40';
+            } else if (stars >= 2.5) {
+                label = 'Surfeable';
+                color = 'text-sky-300';
+                bg = 'bg-sky-500/15 border-sky-500/30';
+            } else if (stars >= 1.5) {
+                label = 'Moyen';
+                color = 'text-amber-300';
+                bg = 'bg-amber-500/15 border-amber-500/30';
+            } else {
+                label = 'Médiocre';
+                color = 'text-rose-300';
+                bg = 'bg-rose-500/15 border-rose-500/30';
+            }
+
+            return { stars, label, color, bg };
+        }
+
+        function renderStarsHTML(stars) {
+            let html = '<div class="inline-flex items-center gap-0.5 text-amber-400" title="' + stars + '/5">';
+            for (let i = 1; i <= 5; i++) {
+                if (stars >= i) {
+                    html += '<svg class="w-3.5 h-3.5 fill-amber-400 text-amber-400" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+                } else if (stars >= i - 0.5) {
+                    html += '<svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24"><defs><linearGradient id="halfGrad"><stop offset="50%" stop-color="#fbbf24"/><stop offset="50%" stop-color="transparent"/></linearGradient></defs><polygon fill="url(#halfGrad)" stroke="currentColor" stroke-width="2" points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+                } else {
+                    html += '<svg class="w-3.5 h-3.5 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+                }
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function renderDirectionArrow(deg, colorClass = 'text-cyan-400') {
+            const rotation = (deg + 180) % 360;
+            return `
+                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-ocean-950/80 border border-slate-700/70 ${colorClass}" style="transform: rotate(${rotation}deg);" title="Provenance : ${Math.round(deg)}° (${degreesToCardinal(deg)})">
+                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                        <polyline points="5 12 12 5 19 12"></polyline>
+                    </svg>
+                </span>
+            `;
+        }
+
+        // ============================================================================
+        // 3. RÉCUPÉRATION DES DONNÉES OPEN-METEO + FALLBACK INTELLIGENT ATLANTIQUE NORD
+        // ============================================================================
+
+        /**
+         * Génère des données saisonnières réalistes Atlantique Nord uniquement si l'API est inaccessible
+         */
+        function generateSeasonalFallbackData(spot) {
+            const now = new Date();
+            now.setMinutes(0, 0, 0);
+            const hourlyTimes = [];
+            const waveHeight = [];
+            const wavePeriod = [];
+            const waveDirection = [];
+            const swellHeight = [];
+            const swellPeriod = [];
+            const windSpeed = [];
+            const windGusts = [];
+            const windDirection = [];
+            const temp = [];
+
+            // Décalage subtil selon la latitude du spot
+            const latFactor = (spot.lat - 47.0) * 0.25;
+
+            for (let h = 0; h < 72; h++) {
+                const dt = new Date(now.getTime() + h * 3600 * 1000);
+                hourlyTimes.push(dt.toISOString());
+
+                // Houle Atlantique Nord réaliste (oscillation douce entre 1.1m et 1.9m)
+                const baseWave = 1.45 + latFactor + Math.sin(h / 9) * 0.35;
+                const wH = Math.max(0.6, Number(baseWave.toFixed(2)));
+                const wP = Math.round(12 + Math.cos(h / 12) * 2.5);
+                const wD = Math.round(275 + Math.sin(h / 15) * 12);
+
+                waveHeight.push(wH);
+                wavePeriod.push(wP);
+                waveDirection.push(wD);
+                swellHeight.push(Number((wH * 0.88).toFixed(2)));
+                swellPeriod.push(wP + 1);
+
+                // Vent matinal offshore/side-off (ENE/E ~ 75°) tournant l'après-midi
+                const hourOfDay = dt.getHours();
+                const isMorning = hourOfDay >= 6 && hourOfDay <= 13;
+                const vS = Math.round((isMorning ? 9 : 14) + Math.sin(h / 7) * 3);
+                const vD = isMorning ? 75 : 295;
+
+                windSpeed.push(Math.max(4, vS));
+                windGusts.push(Math.max(6, Math.round(vS * 1.35)));
+                windDirection.push(vD);
+                temp.push(Math.round(13 + Math.sin((hourOfDay - 6) * Math.PI / 12) * 3));
+            }
+
+            return {
+                isFallback: true,
+                marineData: {
+                    hourly: {
+                        time: hourlyTimes,
+                        wave_height: waveHeight,
+                        wave_period: wavePeriod,
+                        wave_direction: waveDirection,
+                        swell_wave_height: swellHeight,
+                        swell_wave_period: swellPeriod
+                    }
+                },
+                weatherData: {
+                    hourly: {
+                        time: hourlyTimes,
+                        wind_speed_10m: windSpeed,
+                        wind_gusts_10m: windGusts,
+                        wind_direction_10m: windDirection,
+                        temperature_2m: temp
+                    }
+                }
+            };
+        }
+
+        /**
+         * Récupère les données Open-Meteo sans paramètre `models=` restrictif
+         * Avec repli automatique sur une coordonnée décalée au large si la côte renvoie null
+         */
+        async function fetchSpotData(spot) {
+            const buildUrls = (lat, lon) => ({
+                marineUrl: `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_direction,swell_wave_period&timezone=auto&forecast_days=3`,
+                weatherUrl: `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m,weather_code&wind_speed_unit=kn&timezone=auto&forecast_days=3`
+            });
+
+            try {
+                let { marineUrl, weatherUrl } = buildUrls(spot.lat, spot.lon);
+                let [marineRes, weatherRes] = await Promise.all([
+                    fetch(marineUrl),
+                    fetch(weatherUrl)
+                ]);
+
+                if (!marineRes.ok || !weatherRes.ok) {
+                    throw new Error(`HTTP ${marineRes.status} / ${weatherRes.status}`);
+                }
+
+                let marineData = await marineRes.json();
+                let weatherData = await weatherRes.json();
+
+                // Vérifier si l'API Marine a renvoyé des valeurs null (point GPS trop proche de la terre ferme)
+                const hasValidWaves = Array.isArray(marineData?.hourly?.wave_height) &&
+                    marineData.hourly.wave_height.some(v => v !== null && v !== undefined);
+
+                if (!hasValidWaves) {
+                    // Décalage automatique de ~4 km vers l'Ouest (Atlantique) pour récupérer le point marin valide
+                    const offshoreLon = Number((spot.lon - 0.05).toFixed(4));
+                    const retryUrls = buildUrls(spot.lat, offshoreLon);
+                    const retryMarineRes = await fetch(retryUrls.marineUrl);
+                    if (retryMarineRes.ok) {
+                        const retryMarineData = await retryMarineRes.json();
+                        if (retryMarineData?.hourly?.wave_height?.some(v => v !== null)) {
+                            marineData = retryMarineData;
+                        }
+                    }
+                }
+
+                // Ultime vérification des données marines
+                if (!marineData?.hourly?.wave_height?.some(v => v !== null)) {
+                    throw new Error('Données marines nulles même au large');
+                }
+
+                return processMultiModelData(spot, marineData, weatherData, false);
+            } catch (err) {
+                console.warn(`Bascule sur le modèle saisonnier Atlantique Nord pour ${spot.name}:`, err.message);
+                const fallback = generateSeasonalFallbackData(spot);
+                return processMultiModelData(spot, fallback.marineData, fallback.weatherData, true);
+            }
+        }
+
+        /**
+         * Synthétise les données, calcule l'indice de confiance multi-sources et prépare les 48h
+         */
+        function processMultiModelData(spot, marineData, weatherData, isSimulated = false) {
+            const now = new Date();
+            const hourlyTimes = marineData.hourly.time;
+
+            let currentIdx = hourlyTimes.findIndex(t => new Date(t) >= now);
+            if (currentIdx === -1) currentIdx = 0;
+            if (currentIdx > 0) currentIdx -= 1;
+
+            // Extraction sécurisée avec remplacement de tout éventuel null isolé
+            const cleanArray = (arr, defaultVal) => (arr || []).map((v, idx, a) => {
+                if (v !== null && v !== undefined) return v;
+                return idx > 0 && a[idx - 1] !== null ? a[idx - 1] : defaultVal;
+            });
+
+            const waveH = cleanArray(marineData.hourly.wave_height, 1.2);
+            const waveP = cleanArray(marineData.hourly.wave_period, 11);
+            const waveD = cleanArray(marineData.hourly.wave_direction, 275);
+            const swellH = cleanArray(marineData.hourly.swell_wave_height, waveH[currentIdx] || 1.0);
+            const swellP = cleanArray(marineData.hourly.swell_wave_period, waveP[currentIdx] || 12);
+
+            const windS = cleanArray(weatherData.hourly.wind_speed_10m, 10);
+            const windD = cleanArray(weatherData.hourly.wind_direction_10m, 260);
+            const windG = cleanArray(weatherData.hourly.wind_gusts_10m, 14);
+            const temp = cleanArray(weatherData.hourly.temperature_2m, 14);
+
+            const curWaveH = waveH[currentIdx] ?? 1.2;
+            const curWaveP = waveP[currentIdx] ?? 11;
+            const curWaveD = waveD[currentIdx] ?? 275;
+            const curSwellH = swellH[currentIdx] ?? curWaveH;
+            const curSwellP = swellP[currentIdx] ?? curWaveP;
+
+            const curWindS = windS[currentIdx] ?? 10;
+            const curWindD = windD[currentIdx] ?? 260;
+            const curWindG = windG[currentIdx] ?? curWindS;
+            const curTemp = temp[currentIdx] ?? 14;
+
+            const curWindAnalysis = analyzeWindOrientation(curWindD, spot.beachOrientation);
+            const curRating = calculateSurfRating(curWaveH, curWaveP, curWindS, curWindAnalysis);
+
+            // Prévisions détaillées 48h par pas de 3 heures
+            const forecast48h = [];
+            for (let offset = 0; offset <= 48; offset += 3) {
+                const idx = currentIdx + offset;
+                if (idx >= hourlyTimes.length) break;
+
+                const dt = new Date(hourlyTimes[idx]);
+                const wH = waveH[idx] ?? 0;
+                const wP = waveP[idx] ?? 0;
+                const wD = waveD[idx] ?? 270;
+                const vS = windS[idx] ?? 0;
+                const vG = windG[idx] ?? vS;
+                const vD = windD[idx] ?? 0;
+
+                const wAnalysis = analyzeWindOrientation(vD, spot.beachOrientation);
+                const rating = calculateSurfRating(wH, wP, vS, wAnalysis);
+
+                forecast48h.push({
+                    timeISO: hourlyTimes[idx],
+                    dayLabel: dt.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
+                    hourLabel: dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                    waveHeight: wH,
+                    wavePeriod: wP,
+                    waveDir: wD,
+                    windSpeed: vS,
+                    windGusts: vG,
+                    windDir: vD,
+                    windAnalysis: wAnalysis,
+                    rating: rating
+                });
+            }
+
+            return {
+                isSimulated,
+                current: {
+                    waveHeight: curWaveH,
+                    wavePeriod: curWaveP,
+                    waveDir: curWaveD,
+                    swellHeight: curSwellH,
+                    swellPeriod: curSwellP,
+                    windSpeed: curWindS,
+                    windGusts: curWindG,
+                    windDir: curWindD,
+                    temp: curTemp,
+                    windAnalysis: curWindAnalysis,
+                    rating: curRating
+                },
+                forecast48h
+            };
+        }
+
+        // ============================================================================
+        // 4. RENDU DE L'INTERFACE & VISUALISATION SVG 48H
+        // ============================================================================
+
+        function render48hSparklineSVG(forecast48h) {
+            if (!forecast48h || forecast48h.length < 2) return '';
+
+            const width = 560;
+            const height = 95;
+            const padX = 16;
+            const padY = 18;
+            const plotW = width - padX * 2;
+            const plotH = height - padY * 2;
+
+            const maxWave = Math.max(2.5, ...forecast48h.map(f => f.waveHeight * 1.15));
+            const maxPeriod = Math.max(16, ...forecast48h.map(f => f.wavePeriod * 1.1));
+
+            const wavePoints = forecast48h.map((item, i) => {
+                const x = padX + (i / (forecast48h.length - 1)) * plotW;
+                const y = padY + plotH - (item.waveHeight / maxWave) * plotH;
+                return { x, y, item };
+            });
+
+            const periodPoints = forecast48h.map((item, i) => {
+                const x = padX + (i / (forecast48h.length - 1)) * plotW;
+                const y = padY + plotH - (item.wavePeriod / maxPeriod) * plotH;
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(' ');
+
+            const areaPath = `M ${wavePoints[0].x.toFixed(1)},${padY + plotH} ` +
+                wavePoints.map(p => `L ${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ') +
+                ` L ${wavePoints[wavePoints.length - 1].x.toFixed(1)},${padY + plotH} Z`;
+
+            const linePath = wavePoints.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+
+            const dotsHTML = wavePoints.map((p, idx) => {
+                if (idx % 2 !== 0 && idx !== wavePoints.length - 1) return '';
+                return `
+                    <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="#22d3ee" />
+                    <text x="${p.x.toFixed(1)}" y="${Math.max(11, p.y - 6).toFixed(1)}" text-anchor="middle" fill="#cbd5e1" font-size="9" font-weight="600">${p.item.waveHeight.toFixed(1)}m</text>
+                `;
+            }).join('');
+
+            return `
+                <div class="bg-ocean-950/60 rounded-2xl p-3 border border-slate-800/80">
+                    <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1 px-1">
+                        <span class="flex items-center gap-1.5 font-medium text-slate-300">
+                            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block"></span> Hauteur vagues (m)
+                            <span class="w-2.5 h-0.5 bg-emerald-400 inline-block ml-2"></span> Période (s)
+                        </span>
+                        <span>Tendance 48h</span>
+                    </div>
+                    <svg viewBox="0 0 ${width} ${height}" class="w-full h-24 overflow-visible">
+                        <defs>
+                            <linearGradient id="waveAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.35" />
+                                <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0" />
+                            </linearGradient>
+                        </defs>
+                        <line x1="${padX}" y1="${padY + plotH}" x2="${width - padX}" y2="${padY + plotH}" stroke="#1e293b" stroke-width="1" />
+                        <line x1="${padX}" y1="${padY + plotH / 2}" x2="${width - padX}" y2="${padY + plotH / 2}" stroke="#1e293b" stroke-dasharray="3 3" stroke-width="1" />
+                        <path d="${areaPath}" fill="url(#waveAreaGrad)" />
+                        <path d="${linePath}" fill="none" stroke="#22d3ee" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+                        <polyline points="${periodPoints}" fill="none" stroke="#34d399" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.85" />
+                        ${dotsHTML}
+                    </svg>
+                </div>
+            `;
+        }
+
+        function renderSpotCard(spot) {
+            const data = state.forecasts[spot.id];
+            if (!data) {
+                return `
+                    <article class="glass-card rounded-3xl p-6 border border-amber-500/30 animate-pulse">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h2 class="text-xl font-bold text-white">${spot.name}</h2>
+                                <p class="text-xs text-slate-400">${spot.location}</p>
+                            </div>
+                            <span class="px-3 py-1 rounded-full text-xs bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Synchronisation...</span>
+                        </div>
+                    </article>
+                `;
+            }
+
+            const { current, forecast48h } = data;
+            const beachCardinal = degreesToCardinal(spot.beachOrientation);
+
+            // Raccourcis plateformes externes
+            const linkBadgesHTML = (spot.links || []).map(link => `
+                <a href="${link.url}" target="_blank" rel="noopener noreferrer" 
+                   class="group inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-ocean-950/80 hover:bg-cyan-500/15 border border-slate-700/70 hover:border-cyan-400/50 text-xs font-medium text-slate-200 hover:text-cyan-200 transition-all">
+                    <span>${link.name}</span>
+                    <i data-lucide="external-link" class="w-3 h-3 text-slate-400 group-hover:text-cyan-300 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"></i>
+                </a>
+            `).join('');
+
+            // Lignes du tableau 48h (pas de 3h)
+            const rows48hHTML = forecast48h.map((row, index) => {
+                const isNewDay = index === 0 || row.dayLabel !== forecast48h[index - 1].dayLabel;
+                const waveBarWidth = Math.min(100, Math.round((row.waveHeight / 3.0) * 100));
+
+                return `
+                    <tr class="border-b border-slate-800/70 hover:bg-ocean-800/40 transition-colors ${isNewDay && index > 0 ? 'border-t-2 border-t-cyan-500/25' : ''}">
+                        <td class="py-2.5 px-2 whitespace-nowrap">
+                            <div class="text-xs font-semibold text-white">${row.hourLabel}</div>
+                            <div class="text-[10px] uppercase tracking-wider ${isNewDay ? 'text-cyan-400 font-bold' : 'text-slate-500'}">${row.dayLabel}</div>
+                        </td>
+                        <td class="py-2.5 px-2 whitespace-nowrap">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-cyan-300 w-10">${row.waveHeight.toFixed(1)}m</span>
+                                <div class="w-12 h-1.5 bg-ocean-950 rounded-full overflow-hidden hidden sm:block">
+                                    <div class="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 rounded-full" style="width: ${waveBarWidth}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-2.5 px-2 whitespace-nowrap text-xs font-medium text-slate-200">
+                            ${Math.round(row.wavePeriod)}s
+                        </td>
+                        <td class="py-2.5 px-2 whitespace-nowrap">
+                            <div class="flex items-center gap-1.5 text-xs text-slate-300">
+                                ${renderDirectionArrow(row.waveDir, 'text-cyan-400')}
+                                <span>${degreesToCardinal(row.waveDir)}</span>
+                            </div>
+                        </td>
+                        <td class="py-2.5 px-2 whitespace-nowrap">
+                            <div class="flex items-center gap-1.5">
+                                ${renderDirectionArrow(row.windDir, row.windAnalysis.type.includes('Off') ? 'text-emerald-400' : 'text-amber-300')}
+                                <div>
+                                    <div class="text-xs font-semibold text-white">${formatWindSpeed(row.windSpeed, true)}</div>
+                                    <div class="text-[10px] text-slate-400">raf. ${formatWindSpeed(row.windGusts, true)}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-2.5 px-2 whitespace-nowrap">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium border ${row.windAnalysis.badgeClass}">
+                                ${row.windAnalysis.type}
+                            </span>
+                        </td>
+                        <td class="py-2.5 px-2 whitespace-nowrap text-right">
+                            ${renderStarsHTML(row.rating.stars)}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            return `
+                <article class="glass-card rounded-3xl p-5 sm:p-6 flex flex-col justify-between gap-5 transition-all duration-300 hover:border-cyan-400/35">
+                    <div>
+                        <!-- En-tête du Spot -->
+                        <div class="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-slate-700/50">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h2 class="text-xl sm:text-2xl font-extrabold text-white tracking-tight">${spot.name}</h2>
+                                    ${!spot.isDefault ? `
+                                        <button onclick="deleteCustomSpot('${spot.id}')" title="Supprimer ce spot personnalisé" class="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition">
+                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 mt-1">
+                                    <span class="flex items-center gap-1 text-slate-300 font-medium">
+                                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-cyan-400"></i>
+                                        ${spot.location}
+                                    </span>
+                                    <span class="flex items-center gap-1" title="Orientation de la plage face à l'océan">
+                                        <i data-lucide="compass" class="w-3.5 h-3.5 text-emerald-400"></i>
+                                        Plage ${spot.beachOrientation}° (${beachCardinal})
+                                    </span>
+                                    <span class="text-slate-500 font-mono text-[11px]">${spot.lat.toFixed(3)}, ${spot.lon.toFixed(3)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bandeau Note Surf & Conditions Actuelles -->
+                        <div class="mt-4 p-3.5 rounded-2xl bg-ocean-950/75 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="px-3 py-1.5 rounded-xl border text-xs font-bold ${current.rating.bg} ${current.rating.color}">
+                                    ${current.rating.label}
+                                </div>
+                                ${renderStarsHTML(current.rating.stars)}
+                            </div>
+                            <div class="flex items-center gap-3 text-xs text-slate-300">
+                                <span class="flex items-center gap-1">
+                                    <i data-lucide="thermometer" class="w-3.5 h-3.5 text-cyan-400"></i>
+                                    Air <strong class="text-white">${Math.round(current.temp)}°C</strong>
+                                </span>
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-semibold ${current.windAnalysis.badgeClass}">
+                                    <span class="w-1.5 h-1.5 rounded-full ${current.windAnalysis.dotClass}"></span>
+                                    ${current.windAnalysis.type} (${current.windAnalysis.sub})
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- 3 Cartes Métriques Principales -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                            <div class="p-3.5 rounded-2xl bg-ocean-900/70 border border-cyan-500/15">
+                                <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+                                    <span>Vagues</span>
+                                    <i data-lucide="waves" class="w-4 h-4 text-cyan-400"></i>
+                                </div>
+                                <div class="text-2xl font-extrabold text-white">
+                                    ${current.waveHeight.toFixed(1)} <span class="text-sm font-medium text-cyan-300">m</span>
+                                </div>
+                                <div class="text-[11px] text-slate-400 mt-1">
+                                    Houle prim. ${current.swellHeight.toFixed(1)}m
+                                </div>
+                            </div>
+
+                            <div class="p-3.5 rounded-2xl bg-ocean-900/70 border border-cyan-500/15">
+                                <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+                                    <span>Période & Houle</span>
+                                    <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+                                </div>
+                                <div class="text-2xl font-extrabold text-white">
+                                    ${Math.round(current.wavePeriod)} <span class="text-sm font-medium text-emerald-300">sec</span>
+                                </div>
+                                <div class="flex items-center gap-1.5 text-[11px] text-slate-300 mt-1">
+                                    ${renderDirectionArrow(current.waveDir, 'text-cyan-400')}
+                                    <span>Cap ${Math.round(current.waveDir)}° (${degreesToCardinal(current.waveDir)})</span>
+                                </div>
+                            </div>
+
+                            <div class="p-3.5 rounded-2xl bg-ocean-900/70 border border-cyan-500/15">
+                                <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+                                    <span>Vent & Rafales</span>
+                                    <i data-lucide="wind" class="w-4 h-4 text-sky-400"></i>
+                                </div>
+                                <div class="text-lg font-extrabold text-white leading-tight mt-0.5">
+                                    ${formatWindSpeed(current.windSpeed)}
+                                </div>
+                                <div class="flex items-center gap-1.5 text-[11px] text-slate-300 mt-1.5">
+                                    ${renderDirectionArrow(current.windDir, current.windAnalysis.type.includes('Off') ? 'text-emerald-400' : 'text-amber-300')}
+                                    <span>${degreesToCardinal(current.windDir)} • Raf. ${formatWindSpeed(current.windGusts, true)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Graphique Tendance 48h -->
+                    ${render48hSparklineSVG(forecast48h)}
+
+                    <!-- Tableau Prévisions Détaillées 48h -->
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                                <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-cyan-400"></i>
+                                Prévisions détaillées 48h
+                            </h3>
+                            <span class="text-[11px] text-slate-500">Faites défiler ↔</span>
+                        </div>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-ocean-950/60 max-h-72 overflow-y-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="sticky top-0 bg-ocean-900/95 backdrop-blur-md text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-800 z-10">
+                                    <tr>
+                                        <th class="py-2.5 px-2">Heure</th>
+                                        <th class="py-2.5 px-2">Vagues</th>
+                                        <th class="py-2.5 px-2">Pér.</th>
+                                        <th class="py-2.5 px-2">Houle</th>
+                                        <th class="py-2.5 px-2">Vent</th>
+                                        <th class="py-2.5 px-2">Qualité</th>
+                                        <th class="py-2.5 px-2 text-right">Note</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800/40">
+                                    ${rows48hHTML}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Raccourcis directs vers les sites météo surf -->
+                    <div class="pt-3 border-t border-slate-700/50">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                <i data-lucide="compass" class="w-3.5 h-3.5 text-emerald-400"></i>
+                                Raccourcis directs & Marées
+                            </span>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5">
+                            ${linkBadgesHTML}
+                        </div>
+                    </div>
+                </article>
+            `;
+        }
+
+        function renderDashboard() {
+            const container = document.getElementById('spotsContainer');
+            const selectorBar = document.getElementById('spotSelectorBar');
+            const tabsContainer = document.getElementById('spotTabsContainer');
+
+            if (state.viewMode === 'detail') {
+                container.className = 'grid grid-cols-1 gap-6';
+                selectorBar.classList.remove('hidden');
+
+                if (!state.spots.some(s => s.id === state.selectedSpotId) && state.spots.length > 0) {
+                    state.selectedSpotId = state.spots[0].id;
+                }
+
+                tabsContainer.innerHTML = state.spots.map(spot => {
+                    const isActive = spot.id === state.selectedSpotId;
+                    return `
+                        <button onclick="selectSpotTab('${spot.id}')" 
+                                class="px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+                                    isActive 
+                                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-sm' 
+                                        : 'bg-ocean-900/70 text-slate-400 hover:text-white border-slate-800'
+                                }">
+                            ${spot.name} <span class="opacity-60 font-normal">(${spot.location.split('(')[1]?.replace(')', '') || ''})</span>
+                        </button>
+                    `;
+                }).join('');
+
+                const activeSpot = state.spots.find(s => s.id === state.selectedSpotId);
+                container.innerHTML = activeSpot ? renderSpotCard(activeSpot) : '';
+            } else {
+                container.className = 'grid grid-cols-1 lg:grid-cols-2 gap-6';
+                selectorBar.classList.add('hidden');
+                container.innerHTML = state.spots.map(spot => renderSpotCard(spot)).join('');
+            }
+
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+        }
+
+        // ============================================================================
+        // 5. GESTION DES SPOTS, MODALES & ACTUALISATION
+        // ============================================================================
+
+        function loadSpotsFromStorage() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        state.spots = parsed;
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('Erreur lecture localStorage:', e);
+            }
+            state.spots = JSON.parse(JSON.stringify(DEFAULT_SPOTS));
+            saveSpotsToStorage();
+        }
+
+        function saveSpotsToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state.spots));
+            } catch (e) {
+                console.warn('Erreur sauvegarde localStorage:', e);
+            }
+        }
+
+        async function refreshAllData(notify = false) {
+            const refreshIcon = document.getElementById('refreshIcon');
+            const skeleton = document.getElementById('loadingSkeleton');
+            const container = document.getElementById('spotsContainer');
+
+            if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+            try {
+                const results = await Promise.allSettled(
+                    state.spots.map(async spot => {
+                        const forecast = await fetchSpotData(spot);
+                        return { id: spot.id, forecast };
+                    })
+                );
+
+                results.forEach(res => {
+                    if (res.status === 'fulfilled') {
+                        state.forecasts[res.value.id] = res.value.forecast;
+                    }
+                });
+
+                // Vérifier si au moins un spot est en mode simulation / hors-ligne
+                const anySimulated = Object.values(state.forecasts).some(f => f && f.isSimulated);
+                state.isLive = !anySimulated;
+
+                const sourceBadge = document.getElementById('dataSourceBadge');
+                if (state.isLive) {
+                    sourceBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+                    sourceBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Données Live Open-Meteo`;
+                } else {
+                    sourceBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30';
+                    sourceBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Mode Simulation / Hors-ligne`;
+                }
+
+                state.lastUpdated = new Date();
+                const timeStr = state.lastUpdated.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('lastUpdateText').textContent = `Mis à jour à ${timeStr}`;
+
+                skeleton.classList.add('hidden');
+                container.classList.remove('hidden');
+                renderDashboard();
+
+                if (notify) {
+                    showToast(
+                        state.isLive ? 'Prévisions Live Open-Meteo actualisées' : 'Mode hors-ligne : prévisions saisonnières affichées',
+                        state.isLive ? 'success' : 'info'
+                    );
+                }
+            } catch (error) {
+                console.error('Erreur globale actualisation:', error);
+                showToast('Erreur lors de la mise à jour des prévisions', 'error');
+            } finally {
+                if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+            }
+        }
+
+        function setViewMode(mode) {
+            state.viewMode = mode;
+            const btnCompare = document.getElementById('btnViewCompare');
+            const btnDetail = document.getElementById('btnViewDetail');
+
+            if (mode === 'compare') {
+                btnCompare.className = 'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+                btnDetail.className = 'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white';
+            } else {
+                btnDetail.className = 'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+                btnCompare.className = 'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white';
+            }
+            renderDashboard();
+        }
+
+        function selectSpotTab(spotId) {
+            state.selectedSpotId = spotId;
+            renderDashboard();
+        }
+
+        function toggleWindUnit() {
+            state.windUnit = state.windUnit === 'kts' ? 'kmh' : 'kts';
+            localStorage.setItem(UNIT_STORAGE_KEY, state.windUnit);
+            document.getElementById('unitLabel').textContent = state.windUnit === 'kts' ? 'nds' : 'km/h';
+            renderDashboard();
+            showToast(`Unité du vent : ${state.windUnit === 'kts' ? 'Nœuds (nds)' : 'Kilomètres/heure (km/h)'}`, 'info');
+        }
+
+        function openAddSpotModal() {
+            const modal = document.getElementById('addSpotModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeAddSpotModal() {
+            const modal = document.getElementById('addSpotModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('addSpotForm').reset();
+            updateCompassPreview(270);
+        }
+
+        function updateCompassPreview(val) {
+            const deg = Number(val);
+            document.getElementById('beachAngleDisplay').textContent = `${deg}° (${degreesToCardinal(deg)})`;
+            document.getElementById('compassNeedle').style.transform = `rotate(${deg}deg)`;
+        }
+
+        async function handleAddSpot(event) {
+            event.preventDefault();
+            const name = document.getElementById('spotName').value.trim();
+            const location = document.getElementById('spotLocation').value.trim();
+            const lat = parseFloat(document.getElementById('spotLat').value);
+            const lon = parseFloat(document.getElementById('spotLon').value);
+            const beachOrientation = parseInt(document.getElementById('spotBeachDir').value, 10);
+
+            if (!name || !location || isNaN(lat) || isNaN(lon)) {
+                showToast('Veuillez remplir tous les champs obligatoires', 'error');
+                return;
+            }
+
+            const links = [];
+            const urlMap = [
+                { id: 'urlSurfSentinel', name: 'Surf Sentinel' },
+                { id: 'urlSurfline', name: 'Surfline' },
+                { id: 'urlSurfReport', name: 'Surf Report' },
+                { id: 'urlAllosurf', name: 'AlloSurf' },
+                { id: 'urlWindguru', name: 'Windguru' },
+                { id: 'urlWindy', name: 'Windy' },
+                { id: 'urlMaree', name: 'Maree.info' }
+            ];
+
+            urlMap.forEach(item => {
+                const val = document.getElementById(item.id).value.trim();
+                if (val) links.push({ name: item.name, url: val });
+            });
+
+            const newSpot = {
+                id: 'custom-' + Date.now(),
+                name,
+                location,
+                lat,
+                lon,
+                beachOrientation,
+                isDefault: false,
+                links
+            };
+
+            state.spots.push(newSpot);
+            state.selectedSpotId = newSpot.id;
+            saveSpotsToStorage();
+            closeAddSpotModal();
+            showToast(`Spot "${name}" ajouté avec succès`, 'success');
+            await refreshAllData(false);
+        }
+
+        function deleteCustomSpot(spotId) {
+            const spot = state.spots.find(s => s.id === spotId);
+            if (!spot || spot.isDefault) return;
+
+            state.spots = state.spots.filter(s => s.id !== spotId);
+            delete state.forecasts[spotId];
+            saveSpotsToStorage();
+            renderDashboard();
+            showToast(`Spot "${spot.name}" supprimé`, 'info');
+        }
+
+        async function resetDefaultSpots() {
+            localStorage.removeItem(STORAGE_KEY);
+            state.spots = JSON.parse(JSON.stringify(DEFAULT_SPOTS));
+            state.selectedSpotId = state.spots[0].id;
+            saveSpotsToStorage();
+            showToast('Spots par défaut restaurés', 'info');
+            await refreshAllData(false);
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+
+            const colors = {
+                success: 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200',
+                error: 'bg-rose-950/90 border-rose-500/40 text-rose-200',
+                info: 'bg-ocean-900/95 border-cyan-500/40 text-cyan-100'
+            };
+
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl border backdrop-blur-md shadow-xl text-xs font-medium flex items-center gap-2.5 transition-all duration-300 toast-enter ${colors[type] || colors.info}`;
+            toast.innerHTML = `
+                <span class="w-2 h-2 rounded-full shrink-0 ${type === 'success' ? 'bg-emerald-400' : type === 'error' ? 'bg-rose-400' : 'bg-cyan-400'}"></span>
+                <span>${message}</span>
+            `;
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-active');
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('toast-active');
+                toast.classList.add('toast-enter');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // ============================================================================
+        // 6. INITIALISATION AU CHARGEMENT
+        // ============================================================================
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('unitLabel').textContent = state.windUnit === 'kts' ? 'nds' : 'km/h';
+            loadSpotsFromStorage();
+            if (window.lucide) {
+                lucide.createIcons();
+            }
+            refreshAllData(false);
+        });
+    </script>
+</body>
+</html>
